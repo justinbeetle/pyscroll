@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 import math
 import time
-from collections.abc import Callable
 from itertools import chain, product
 from typing import Any, Callable, Optional, TYPE_CHECKING, Union
 
@@ -478,7 +477,7 @@ class BufferedRenderer:
         get_tile = self.data.get_tile_image
         tile_layers = tuple(sorted(self.data.visible_tile_layers))
         top_layer = tile_layers[-1]
-        blit_list = list()
+        blit_list = []
         sprite_damage = set()
         order = 0
 
@@ -502,10 +501,7 @@ class BufferedRenderer:
                     sprite_damage.add((l, hit_rect))
 
             # add surface to draw list
-            try:
-                blend = i[3]
-            except IndexError:
-                blend = None
+            blend = i[3] if len(i) >= 4 else None
             x, y, w, h = r
             blit_op = l, 1, x, y, order, s, blend
             blit_list.append(blit_op)
@@ -518,7 +514,6 @@ class BufferedRenderer:
         # equal to the damaged layer, then add the entire column of
         # tiles to the blit_list.  if not, then discard the column and
         # do not update the screen when the damage was done.
-        column = []
         for dl, damage_rect in sprite_damage:
             x, y, w, h = damage_rect
             tx = x // w + left
@@ -530,21 +525,12 @@ class BufferedRenderer:
                     sx = x - ox
                     sy = y - oy
                     blit_op = l, 0, sx, sy, order, tile, None
-                    column.append(blit_op)
+                    blit_list.append(blit_op)
                     order += 1
-            if len(column):
-                blit_list.extend(column)
-            column.clear()
 
         # finally sort and do the thing
         blit_list.sort(key=self.blit_list_sort_key)
-        draw_list2 = list()
-        for l, priority, x, y, order, s, blend in blit_list:
-            if blend is not None:
-                blit_op = s, (x, y), None, blend
-            else:
-                blit_op = s, (x, y)
-            draw_list2.append(blit_op)
+        draw_list2 = [(s, (x, y), None, blend) if blend else (s, (x, y)) for _, _, x, y, _, s, blend in blit_list]
         surface.blits(draw_list2, doreturn=False)
 
     def set_blit_list_sort_key(
